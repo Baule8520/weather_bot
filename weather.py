@@ -87,7 +87,7 @@ def command_help(m):
 @bot.message_handler(commands=['aktuell'])
 def auswertung(m):
     cid = m.chat.id
-    data = client.query('SELECT * FROM wetterstation GROUP BY * ORDER BY DESC LIMIT 1')
+    data = client.query('SELECT * FROM wetterdaten GROUP BY * ORDER BY DESC LIMIT 1')
     bot.send_message(cid, data)
 
 
