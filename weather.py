@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import time, configparser
+import time, threading, schedule, configparser
 
 import telebot
 from telebot import types
