@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import time, threading, schedule, configparser, data
+import time, threading, schedule, configparser, data, json
 
 import telebot
 from telebot import types
@@ -88,7 +88,10 @@ def command_help(m):
 def auswertung(m):
     cid = m.chat.id
     data = client.query('SELECT * FROM wetterdaten GROUP BY * ORDER BY DESC LIMIT 1')
-    bot.send_message(cid, data)
+    dict = json.loads(data)
+    for keys,values in dict.items():
+        jo = str(keys) + ": " + str(values)
+        bot.send_message(cid, jo)
 
 
 # Erinnern lassen
