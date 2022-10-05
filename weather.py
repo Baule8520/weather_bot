@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import time, threading, schedule, configparser, data, json
+import time, threading, schedule, configparser, data
 
 import telebot
 from telebot import types
@@ -18,8 +18,9 @@ dbname = config.get('config', 'dbname')
 commands = {
     'start': 'Begrüßung & Scan',
     'hilfe': 'Informationen zur Bedienung',
-    'erinnern': 'Die Erinnerung starten',
-    'aktuell': 'Auswertung der Selbstfürsorge'
+    'update': 'Regelmäßige Updates erhalten',
+    'aktuell': 'Empfange aktuelle Wetterdaten',
+    'stop': 'Stoppe das regelmäßige Update'
 }
 
 number_board = types.ReplyKeyboardMarkup(one_time_keyboard=True)
@@ -41,9 +42,24 @@ def listener(messages):
             print(str(m.chat.first_name) + " [" + str(m.chat.id) + "]: " + m.text)
 
 
-def beep(cid):
-    bot.send_message(cid, "Vergib eine Note für deine Selbstfürsorge:", reply_markup=number_board)
-    data.store_userStep(cid, 2)
+def get_data():
+    data = client.query('SELECT * FROM wetterdaten GROUP BY * ORDER BY DESC LIMIT 1')
+    data = data.raw
+    data = data["series"]
+    data = data[0]
+    data = data["values"]
+    data = data[0]
+    name = ["- Messzeitpunkt: ", "- Meereshöhe (Luftdruck): ", "- Feuchtigkeit: ", "- Lichtstärke: ", "- Luftdruck: ", "- Innentemperatur: ", "- Außentemperatur: ", "- W-LAN Signalstärke: ", "- Luftdruckabweichung zum Normaldruck: ", "- gefühlte Temperatur: ", "- Regen: "]
+    einheit = ["", " m", " %", " Lux", " hPa", " °C", " °C", " dBm", " hPa", " °C", " Tropfen"]
+    res = "\n".join("{} {} {}".format(x, y, z) for x, y, z in zip(name, data, einheit))
+    return res
+
+
+def update(cid):
+    data = "Hier ist dein aktuelles Wetterupdate:\n"
+    data += get_data()
+    bot.send_message(cid, data)
+    
 
 
 bot = telebot.TeleBot(token)
@@ -87,18 +103,15 @@ def command_help(m):
 @bot.message_handler(commands=['aktuell'])
 def auswertung(m):
     cid = m.chat.id
-    data = client.query('SELECT * FROM wetterdaten GROUP BY * ORDER BY DESC LIMIT 1')
-    dict = json.loads(data)
-    for keys,values in dict.items():
-        jo = str(keys) + ": " + str(values)
-        bot.send_message(cid, jo)
+    res = get_data()
+    bot.send_message(cid, res)
 
 
 # Erinnern lassen
-@bot.message_handler(commands=['erinnern'])
+@bot.message_handler(commands=['update'])
 def erinnern(m):
     cid = m.chat.id
-    bot.send_message(cid, "In wie vielen Minuten soll ich dich erinnern?")
+    bot.send_message(cid, "In wie vielen Minuten soll ich dir ein regelmäßiges Update schicken?")
     data.store_userStep(cid, 1)
 
 
@@ -113,43 +126,19 @@ def set_timer(m):
 
     if len(args) == 1 and args[0].isdigit():
         sec = int(args[0])
-        schedule.every(sec).minutes.do(beep, cid).tag(cid)
-        bot.send_message(cid, "Erinnerung gestellt!")
+        schedule.every(sec).minutes.do(update, cid).tag(cid)
+        bot.send_message(cid, "Updates aktiviert!")
         data.store_userStep(cid, 0)
     else:
         bot.reply_to(m, 'Bitte nur die Anzahl der Minuten eingeben.')
         bot.send_message(m, 'Bitte erneut versuchen.')
 
 
-# Selbstfürsorge Nummer
-@bot.message_handler(func=lambda message: data.get_userstep(message.chat.id) == 2)
-def sfn(m):
-    cid = m.chat.id
-    nummer = m.text
-    if nummer.isdigit():
-        bot.send_chat_action(cid, 'typing')
-        bot.send_message(cid, "Wie geht es die gerade?", reply_markup=hideBoard)
-        data.store_userStep(cid, 3)
-    else:
-        bot.send_message(cid, "Bitte vorgegebenes Keyboard benutzen!")
-        beep(cid)
-
-
-# Selbstfürsorge Text
-@bot.message_handler(func=lambda message: data.get_userstep(message.chat.id) == 3)
-def sft(m):
-    cid = m.chat.id
-    text = m.text
-    bot.send_chat_action(cid, 'typing')
-    bot.send_message(cid, "Danke! Pass weiterhin auf dich auf!", reply_markup=hideBoard)
-    data.store_userStep(cid, 0)
-
-
 # Stop
 @bot.message_handler(commands=['stop'])
 def unset_timer(message):
     schedule.clear(message.chat.id)
-    bot.reply_to(message, "Erinnerung deaktiviert!")
+    bot.reply_to(message, "Updates deaktiviert!")
 
 
 # Easteregg
@@ -161,7 +150,7 @@ def easteregg(m):
 # Standard Handler
 @bot.message_handler(func=lambda message: True, content_types=['text'])
 def command_default(m):
-    bot.send_message(m.chat.id, "Ich verstehe \"" + m.text + "\"nicht. Bitte /hilfe eingeben.")
+    bot.send_message(m.chat.id, "Ich verstehe \"" + m.text + "\"nicht. Bitte /start nutzen & dann /hilfe eingeben.")
 
 
 if __name__ == '__main__':
